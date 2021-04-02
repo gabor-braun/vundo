@@ -103,6 +103,10 @@
   :type '(choice (const :tag "Bottom" bottom)
                  (const :tag "Top"    top)))
 
+(defcustom vundo-enable-diff nil
+  "If non-nil, vundo will display the diff of the node in another window."
+  :type 'boolean)
+
 (defvar vundo-translation-alist nil
   "An alist mapping text to their translations.
 E.g., mapping ○ to o, ● to *. Keys and values must be characters,
@@ -413,6 +417,14 @@ Translate according to `vundo-translation-alist'."
   "Return the vundo buffer."
   (get-buffer-create " *vundo tree*"))
 
+(defun vundo--diff-buffer ()
+  "Return the vundo diff buffer."
+  ;; To do this, all keys would have to be forwarded to the main window, where the variables are
+  ;; all set.
+  ;; (unless (derived-mode-p 'vundo--mode)
+  ;;   (vundo--mode))
+  (get-buffer-create " *vundo diff*"))
+
 (defun vundo--kill-buffer-if-point-left (window)
   "Kill the vundo buffer if point left WINDOW.
 WINDOW is the window that was/is displaying the vundo buffer."
@@ -541,7 +553,9 @@ If INCREMENTAL non-nil, reuse some date."
       (setq vundo--prev-mod-list mod-list
             vundo--prev-mod-hash mod-hash
             vundo--prev-undo-list undo-list
-            vundo--orig-buffer orig-buffer))))
+            vundo--orig-buffer orig-buffer)
+      (when vundo-enable-diff
+        (vundo--update-diff)))))
 
 (defun vundo--current-node (mod-list)
   "Return the currently highlighted node in MOD-LIST."
@@ -571,6 +585,12 @@ Highlight if ARG >= 0, de-highlight if ARG < 0."
       `((side . ,vundo-window-side)
         (window-height . 3))))
     (set-window-dedicated-p nil t)
+    (when vundo-enable-diff
+      (display-buffer-in-side-window
+       (vundo--diff-buffer)
+       `((side . ,vundo-window-side)
+         (slot . 1)
+         (window-height . 3))))
     (let ((window-min-height 3))
       (fit-window-to-buffer nil vundo--window-max-height))
     (goto-char
@@ -634,6 +654,9 @@ Roll back changes if `vundo-roll-back-on-quit' is non-nil."
       (vundo--current-node vundo--prev-mod-list)
       vundo--roll-back-to-this
       vundo--orig-buffer vundo--prev-mod-list))
+   (when vundo-enable-diff
+     (with-current-buffer (vundo--diff-buffer)
+       (kill-buffer-and-window)))
    (kill-buffer-and-window)))
 
 ;;; Traverse undo tree
@@ -869,6 +892,37 @@ If ARG < 0, move forward."
      (vundo--refresh-buffer
       vundo--orig-buffer (current-buffer)
       'incremental))))
+
+(defun vundo--update-diff ()
+  ;; Create diff between current node and previous state in diff buffer.
+  (require 'diff)
+  (let ((vundo-buf (vundo--buffer))
+        (orig-buf vundo--orig-buffer)
+        (tmp-buf (get-buffer-create " *vundo tmp*")))
+    (with-current-buffer tmp-buf
+      (erase-buffer)
+      (insert-buffer-substring orig-buf))
+
+  (let* ((node (vundo--current-node vundo--prev-mod-list))
+         (dest (vundo-m-parent node)))
+    (vundo--move-to-node
+     node dest tmp-buf vundo--prev-mod-list))
+
+  (let ((vundo-diff-buf (vundo--diff-buffer)))
+    (setq buff (diff-no-select
+                tmp-buf vundo--orig-buffer nil 'noasync
+                vundo-diff-buf))
+    (let ((inhibit-read-only t))
+      (with-current-buffer buff
+        (goto-char (point-min))
+        (delete-region (point) (1+ (line-end-position 3)))
+        (goto-char (point-max))
+        (forward-line -2)
+        (delete-region (point) (point-max))
+        (setq cursor-type nil)
+        (setq buffer-read-only t)))
+    )
+  ))
 
 ;;; Debug
 
