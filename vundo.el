@@ -553,12 +553,10 @@ If INCREMENTAL non-nil, reuse some date."
   "Toggle highlight of NODE.
 Highlight if ARG >= 0, de-highlight if ARG < 0."
   (goto-char (vundo-m-point node))
-  (if (>= arg 0)
-      (add-text-properties (1- (point)) (point)
-                           (list 'display (vundo--translate "●")
-                                 'face 'vundo-highlight))
-    (add-text-properties (1- (point)) (point)
-                         (list 'display nil 'face 'vundo-node))))
+  (put-text-property
+   (1- (point)) (point) 'display
+   (when (>= arg 0)
+     (propertize (vundo--translate "●") 'face 'vundo-highlight))))
 
 ;;;###autoload
 (defun vundo ()
