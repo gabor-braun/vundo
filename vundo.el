@@ -901,7 +901,8 @@ If ARG < 0, move forward."
         (tmp-buf (get-buffer-create " *vundo tmp*")))
     (with-current-buffer tmp-buf
       (erase-buffer)
-      (insert-buffer-substring orig-buf))
+      (insert (with-current-buffer orig-buf
+                (save-restriction (widen) (buffer-string)))))
 
   (let* ((node (vundo--current-node vundo--prev-mod-list))
          (dest (vundo-m-parent node)))
