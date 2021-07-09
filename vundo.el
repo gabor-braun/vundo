@@ -896,7 +896,7 @@ If ARG < 0, move forward."
 
 (defun vundo--update-diff ()
   "Update vundo diff buffer."
-  (let ((vundo-buf (vundo--buffer))
+  (let (
         (orig-buf vundo--orig-buffer)
         (tmp-buf (get-buffer-create " *vundo tmp*")))
     (with-current-buffer tmp-buf
@@ -909,10 +909,10 @@ If ARG < 0, move forward."
     (vundo--move-to-node
      node dest tmp-buf vundo--prev-mod-list))
 
-  (let ((vundo-diff-buf (vundo--diff-buffer)))
-    (setq buff (diff-no-select
+  (let ((buff (vundo--diff-buffer)))
+    (diff-no-select
                 tmp-buf vundo--orig-buffer nil 'noasync
-                vundo-diff-buf))
+                buff)
     (let ((inhibit-read-only t))
       (with-current-buffer buff
         (goto-char (point-min))
