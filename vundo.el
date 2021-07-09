@@ -71,6 +71,7 @@
 (require 'pcase)
 (require 'cl-lib)
 (require 'seq)
+(autoload 'diff-no-select "diff")
 
 ;;; Customization
 
@@ -894,8 +895,7 @@ If ARG < 0, move forward."
       'incremental))))
 
 (defun vundo--update-diff ()
-  ;; Create diff between current node and previous state in diff buffer.
-  (require 'diff)
+  "Update vundo diff buffer."
   (let ((vundo-buf (vundo--buffer))
         (orig-buf vundo--orig-buffer)
         (tmp-buf (get-buffer-create " *vundo tmp*")))
