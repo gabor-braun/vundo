@@ -896,19 +896,17 @@ If ARG < 0, move forward."
 
 (defun vundo--update-diff ()
   "Update vundo diff buffer."
+  (progn
   (let ((current (vundo--current-node vundo--prev-mod-list))
         (orig-buf vundo--orig-buffer)
-        (tmp-buf (get-buffer-create " *vundo tmp*")))
-    (with-current-buffer tmp-buf
+        (buff (vundo--diff-buffer)))
+    (with-temp-buffer
       (erase-buffer)
       (insert (with-current-buffer orig-buf
                 (save-restriction (widen) (buffer-string))))
-      (primitive-undo 1 (vundo-m-undo-list current)))
+      (primitive-undo 1 (vundo-m-undo-list current))
+      (diff-no-select (current-buffer) orig-buf nil 'noasync buff))
 
-  (let ((buff (vundo--diff-buffer)))
-    (diff-no-select
-                tmp-buf vundo--orig-buffer nil 'noasync
-                buff)
     (let ((inhibit-read-only t))
       (with-current-buffer buff
         (goto-char (point-min))
