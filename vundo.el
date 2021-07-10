@@ -656,8 +656,7 @@ Roll back changes if `vundo-roll-back-on-quit' is non-nil."
       vundo--roll-back-to-this
       vundo--orig-buffer vundo--prev-mod-list))
    (when vundo-enable-diff
-     (with-current-buffer (vundo--diff-buffer)
-       (kill-buffer-and-window)))
+     (kill-buffer (vundo--diff-buffer)))
    (kill-buffer-and-window)))
 
 ;;; Traverse undo tree
