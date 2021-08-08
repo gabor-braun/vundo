@@ -556,7 +556,10 @@ Highlight if ARG >= 0, de-highlight if ARG < 0."
   (put-text-property
    (1- (point)) (point) 'display
    (when (>= arg 0)
-     (propertize (vundo--translate "●") 'face 'vundo-highlight))))
+     (let ((string (vundo--translate "●")))
+       (add-text-properties
+        0 1 (text-properties-at (1- (point))) string)
+       (propertize string 'face 'vundo-highlight)))))
 
 ;;;###autoload
 (defun vundo ()
