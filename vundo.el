@@ -103,28 +103,46 @@
   :type '(choice (const :tag "Bottom" bottom)
                  (const :tag "Top"    top)))
 
-(defvar vundo-translation-alist nil
-  "An alist mapping text to their translations.
-E.g., mapping ○ to o, ● to *. Keys and values must be characters,
-not strings.")
+(defconst vundo-ascii-symbols
+  '((selected-node . ?*)
+    (node . ?o)
+    (horizontal-stem . ?-)
+    (vertical-stem . ?|)
+    (branch . ?|)
+    (last-branch . ?+))
+  "ASCII symbols to draw vundo tree.")
 
-;;;###autoload
-(define-minor-mode vundo-ascii-mode
-  "Display the undo tree with ASCII characters."
-  :global t
-  (if vundo-ascii-mode
-      (progn
-        (put 'vundo-translation-alist 'before-ascii
-             vundo-translation-alist)
-        (setq vundo-translation-alist
-              '((?○ . ?o)
-                (?● . ?*)
-                (?─ . ?-)
-                (?│ . ?|)
-                (?├ . ?|)
-                (?└ . ?+))))
-    (setq vundo-translation-alist
-          (get 'vundo-translation-alist 'before-ascii))))
+(defconst vundo-unicode-symbols
+  '((selected-node . ?●)
+    (node . ?○)
+    (horizontal-stem . ?─)
+    (vertical-stem . ?│)
+    (branch . ?├)
+    (last-branch . ?└))
+  "Unicode symbols to draw vundo tree.")
+
+(defcustom vundo-glyph-alist vundo-unicode-symbols
+  "Alist mapping tree parts to characters used to draw a tree.
+Keys are names for different parts of a tree, values are
+characters for that part. Possible keys include
+
+node            which represents ○
+selected-node   which represents ●
+horizontal-stem which represents ─
+vertical-stem   which represents │
+branch          which represents ├
+last-branch     which represents └
+
+in a tree like
+
+    ○──○──○
+    │  └──●
+    ├──○
+    └──○"
+  :type `(alist :tag "Translation alist"
+		        :key-type (symbol :tag "Part of tree")
+		        :value-type (character :tag "Draw using")
+		        :options ,(mapcar #'car vundo-unicode-symbols)))
 
 ;;; Undo list to mod list
 
@@ -343,16 +361,20 @@ If a line is not COL columns long, skip that line."
       (indent-to-column col))))
 
 (defun vundo--translate (text)
-  "Translate each character in TEXT and return it.
-Translate according to `vundo-translation-alist'."
-  (seq-mapcat (lambda (c)
+  "Translate each character in TEXT and return translated TEXT.
+Translate according to ‘vundo-glyph-alist’."
+  (seq-mapcat (lambda (ch)
                 (char-to-string
-                 (alist-get c vundo-translation-alist c)))
+                 (alist-get
+                  (pcase ch
+                    (?○ 'node)
+                    (?● 'selected-node)
+                    (?─ 'horizontal-stem)
+                    (?│ 'vertical-stem)
+                    (?├ 'branch)
+                    (?└ 'last-branch))
+                  vundo-glyph-alist)))
               text 'string))
-
-(defun vundo--put-face (beg end face)
-  "Add FACE to the text between (+ (point) BEG) and (+ (point) END)."
-  (put-text-property (+ (point) beg) (+ (point) end) 'face face))
 
 (defun vundo--draw-tree (mod-list)
   "Draw the tree in MOD-LIST in current buffer."
@@ -372,8 +394,8 @@ Translate according to `vundo-translation-alist'."
         (if parent (goto-char (vundo-m-point parent)))
         (let ((col (max 0 (1- (current-column)))))
           (if (null parent)
-              (progn (insert (vundo--translate "○"))
-                     (vundo--put-face -1 0 'vundo-node))
+              (insert (propertize (vundo--translate "○")
+                                  'face 'vundo-node))
             (let ((planned-point (point)))
               ;; If a node is blocking, try next line.
               ;; Example: 1--2--3  Here we want to add a
@@ -381,25 +403,26 @@ Translate according to `vundo-translation-alist'."
               ;;             +--4  by that plus sign.
               (while (not (looking-at (rx (or "    " eol))))
                 (vundo--next-line-at-column col)
-                (if (looking-at "$")
-                    (insert (vundo--translate "│"))
-                  (delete-char 1)
-                  (insert (vundo--translate "│")))
-                (vundo--put-face -1 0 'vundo-stem))
+                (unless (looking-at "$")
+                  (delete-char 1))
+                (insert (propertize (vundo--translate "│")
+                                    'face 'vundo-stem)))
               ;; Make room for inserting the new node.
               (unless (looking-at "$")
                 (delete-char 3))
               ;; Insert the new node.
               (if (eq (point) planned-point)
-                  (progn (insert (vundo--translate "──○"))
-                         (vundo--put-face -3 -1 'vundo-stem))
+                  (insert (propertize (vundo--translate "──")
+                                      'face 'vundo-stem)
+                          (propertize (vundo--translate "○")
+                                      'face 'vundo-node))
                 ;; Delete the previously inserted |.
                 (delete-char -1)
-                (if node-last-child-p
-                    (insert (vundo--translate "└──○"))
-                  (insert (vundo--translate "├──○")))
-                (vundo--put-face -4 -1 'vundo-stem))
-              (vundo--put-face -1 0 'vundo-node))))
+                (insert (propertize (vundo--translate
+                                     (if node-last-child-p "└──" "├──"))
+                                    'face 'vundo-stem))
+                (insert (propertize (vundo--translate "○")
+                                    'face 'vundo-node))))))
         ;; Store point so we can later come back to this node.
         (setf (vundo-m-point node) (point))
         ;; Associate the text node in buffer with the node object.
@@ -437,7 +460,7 @@ WINDOW is the window that was/is displaying the vundo buffer."
     (define-key map (kbd "e") #'vundo-stem-end)
     (define-key map (kbd "q") #'vundo-quit)
     (define-key map (kbd "C-g") #'vundo-quit)
-    (define-key map (kbd "RET") #'kill-buffer-and-window)
+    (define-key map (kbd "RET") #'vundo-confirm)
     (define-key map (kbd "i") #'vundo--inspect)
     (define-key map (kbd "d") #'vundo--debug)
     map)
@@ -463,6 +486,8 @@ WINDOW is the window that was/is displaying the vundo buffer."
   "If non-nil, print information when moving between nodes.")
 (defvar-local vundo--roll-back-to-this nil
   "Vundo will roll back to this node.")
+(defvar-local vundo--highlight-overlay nil
+  "Overlay used to highlight the selected node.")
 
 (defun vundo--mod-list-trim (mod-list n)
   "Remove MODS from MOD-LIST.
@@ -501,11 +526,6 @@ If INCREMENTAL non-nil, reuse some date."
                              (vundo--latest-buffer-state
                               vundo--prev-mod-list)))
           (inhibit-read-only t))
-      ;; 1.5 De-highlight the current node before
-      ;; `vundo--prev-mod-list' changes.
-      (when vundo--prev-mod-list
-        (vundo--toggle-highlight
-         -1 (vundo--current-node vundo--prev-mod-list)))
       ;; 2. Here we consider two cases, adding more nodes (or starting
       ;; from scratch) or removing nodes. In both cases, we update and
       ;; set MOD-LIST and MOD-HASH. We don't need to worry about the
@@ -538,7 +558,8 @@ If INCREMENTAL non-nil, reuse some date."
                   latest-state)
         (vundo--draw-tree mod-list))
       ;; Highlight current node.
-      (vundo--toggle-highlight 1 (vundo--current-node mod-list))
+      (vundo--highlight-node (vundo--current-node mod-list))
+      (goto-char (vundo-m-point (vundo--current-node mod-list)))
       ;; Update cache.
       (setq vundo--prev-mod-list mod-list
             vundo--prev-mod-hash mod-hash
@@ -549,17 +570,18 @@ If INCREMENTAL non-nil, reuse some date."
   "Return the currently highlighted node in MOD-LIST."
   (car (vundo--eqv-list-of (car (last mod-list)))))
 
-(defun vundo--toggle-highlight (arg node)
-  "Toggle highlight of NODE.
-Highlight if ARG >= 0, de-highlight if ARG < 0."
-  (goto-char (vundo-m-point node))
-  (put-text-property
-   (1- (point)) (point) 'display
-   (when (>= arg 0)
-     (let ((string (vundo--translate "●")))
-       (add-text-properties
-        0 1 (text-properties-at (1- (point))) string)
-       (propertize string 'face 'vundo-highlight)))))
+(defun vundo--highlight-node (node)
+  "Highlight NODE as current node."
+  (when vundo--highlight-overlay
+    (delete-overlay vundo--highlight-overlay))
+  (let ((string (vundo--translate "●"))
+        (pos (vundo-m-point node)))
+    (add-text-properties 0 1 (text-properties-at (1- pos)) string)
+    (propertize string 'face 'vundo-highlight)
+    (setq vundo--highlight-overlay
+          (make-overlay (1- pos) pos))
+    (overlay-put vundo--highlight-overlay
+                 'display string)))
 
 ;;;###autoload
 (defun vundo ()
@@ -637,6 +659,9 @@ Roll back changes if `vundo-roll-back-on-quit' is non-nil."
       (vundo--current-node vundo--prev-mod-list)
       vundo--roll-back-to-this
       vundo--orig-buffer vundo--prev-mod-list))
+   (with-current-buffer vundo--orig-buffer
+     (setq-local inhibit-modification-hooks nil
+                 buffer-read-only nil))
    (kill-buffer-and-window)))
 
 (define-button-type 'vundo-node
@@ -655,6 +680,14 @@ Roll back changes if `vundo-roll-back-on-quit' is non-nil."
                    (vundo--refresh-buffer
                     vundo--orig-buffer (current-buffer)
                     'incremental))))
+
+(defun vundo-confirm ()
+  "Confirm change and close vundo window."
+  (interactive)
+  (with-current-buffer vundo--orig-buffer
+    (setq-local inhibit-modification-hooks nil
+                buffer-read-only nil))
+  (kill-buffer-and-window))
 
 ;;; Traverse undo tree
 
@@ -734,6 +767,8 @@ after calling this function."
                             undo-list-at-source undo-list-at-dest))
              trimmed)
         (with-current-buffer orig-buffer
+          (setq-local inhibit-modification-hooks t
+                      buffer-read-only t)
           ;; 2. Undo. This will undo modifications in PLANNED-UNDO and
           ;; add new entries to ‘buffer-undo-list’.
           (let ((undo-in-progress t))
