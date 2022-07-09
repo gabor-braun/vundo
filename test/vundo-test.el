@@ -15,9 +15,9 @@
 
 (ert-deftest vundo-test--mod-list ()
   "Tests for mod-list generation and incremental extension."
-  (let* ((ul3 '(3 2 1))
-         (ul6 (append '(6 5 4 nil) ul3))
-         (ul9 (append '(9 8 7 nil) ul6))
+  (let* ((ul3 '(m3 m2 m1))
+         (ul6 (append '(m6 m5 m4 nil) ul3))
+         (ul9 (append '(m9 m8 m7 nil) ul6))
          (ml6 (vundo--mod-list-from ul6 7 nil))
          (ml9 (vundo--mod-list-from ul9 4 ml6)))
     (should (equal (mapcar #'vundo-m-undo-list ml6)
@@ -26,14 +26,33 @@
                    (list nil ul3 ul6 ul9)))
 
     (let ((ht6 (vundo--update-mapping ml6 nil 0)))
-      (should (eq (gethash ul3 ht6) (nth 1 ml6)))
-      (should (eq (gethash ul6 ht6) (nth 2 ml6)))
+      (should (eq (gethash ul3 ht6) (aref ml6 1)))
+      (should (eq (gethash ul6 ht6) (aref ml6 2)))
 
       (let ((ht9 (vundo--update-mapping ml9 ht6 3)))
-        (should (eq (gethash ul9 ht9) (nth 3 ml9))))
+        (should (eq (gethash ul9 ht9) (aref ml9 3))))
 
       (should (equal (mapcar #'vundo-m-idx ml9)
                      '(0 1 2 3))))))
+
+(ert-deftest vundo-test--position-only-p ()
+  "Tests for ‘vundo--position-only-p’."
+  (let* ((ul1 '(9 nil 8 nil 7 nil))
+         (ul2 '(9 nil 8 stuff nil 7 nil)))
+    (should (vundo--position-only-p ul1))
+    (should (vundo--position-only-p (nthcdr 2 ul1)))
+    (should (vundo--position-only-p (nthcdr 4 ul1)))
+    (should (vundo--position-only-p (last ul1)))
+
+    (should (vundo--position-only-p ul2))
+    (should (not (vundo--position-only-p (nthcdr 2 ul2))))
+    (should (vundo--position-only-p (nthcdr 5 ul2)))))
+
+(ert-deftest vundo-test--skip-position-only ()
+  "Tests for skipping position-only records."
+  (let* ((ul2 '(stuff nil 9 nil 8 stuff nil 7 nil)))
+    (should (equal (length (vundo--mod-list-from ul2))
+                   3))))
 
 (defsubst vundo-test--buf-str-np ()
   "(buffer-substring-no-properties (point-min) (point-max))."
@@ -46,13 +65,13 @@
 
 (defsubst vundo-test--last-idx ()
   "(vundo-m-idx (car (last vundo--prev-mod-list)))."
-  (vundo-m-idx (car (last vundo--prev-mod-list))))
+  (vundo-m-idx (aref vundo--prev-mod-list (1- (length vundo--prev-mod-list)))))
 
 (defmacro vundo-test--setup (&rest body)
   "Setup and evaluate BODY."
   `(with-temp-buffer
      (buffer-enable-undo)
-     (let ((vundo-translation-alist nil))
+     (let ((vundo-glyph-alist vundo-unicode-symbols))
        ,@body)))
 
 (ert-deftest vundo-test--1 ()
@@ -147,22 +166,26 @@ Sans ending newline."
      (vundo-forward 1)
      (vundo-next 1)
      (should (eq (vundo--get-node-at-point)
-                 (nth 51 vundo--prev-mod-list)))
+                 (aref vundo--prev-mod-list 51)))
 
      (dotimes (_ 20)
        (vundo-previous 1)
        (vundo-next 1))
      (should (eq (vundo--get-node-at-point)
-                 (nth 51 vundo--prev-mod-list)))
+                 (aref vundo--prev-mod-list 51)))
 
      (dotimes (_ 20)
        (vundo-forward 49)
        (vundo-backward 49))
      (should (eq (vundo--get-node-at-point)
-                 (nth 51 vundo--prev-mod-list))))))
+                 (aref vundo--prev-mod-list 51))))))
 
 (ert-deftest vundo-test--3 ()
   "This tests regional undos."
+  ;; Emacs do weird things with region and mark in batch mode. Not
+  ;; sure the reason, but in batch mode the first undo we perform is
+  ;; not regional, and the test will fail.
+  (ert--skip-unless (not noninteractive))
   (vundo-test--setup
    (vundo-test--insert "a" "b" "c" "d" "e")
    ;; Undo in region that covers "ab".
