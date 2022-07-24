@@ -899,17 +899,16 @@ This function must be called from a vundo buffer."
   "Update vundo diff buffer."
   (when (buffer-live-p vundo-enable-diff)
     (with-current-buffer
-  (let ((current (vundo--current-node vundo--prev-mod-list))
-        (orig-buf vundo--orig-buffer)
-            (buff vundo-enable-diff))
-    (with-temp-buffer
-      (erase-buffer)
-      (insert (with-current-buffer orig-buf
-                (save-restriction (widen) (buffer-string))))
-      (primitive-undo 1 (vundo-m-undo-list current))
-      (diff-no-select (current-buffer) orig-buf nil 'noasync buff)))
-
-    (let ((inhibit-read-only t))
+        (let ((current (vundo--current-node vundo--prev-mod-list))
+              (orig-buf vundo--orig-buffer)
+              (buff vundo-enable-diff))
+          (with-temp-buffer
+            (erase-buffer)
+            (insert (with-current-buffer orig-buf
+                      (save-restriction (widen) (buffer-string))))
+            (primitive-undo 1 (vundo-m-undo-list current))
+            (diff-no-select (current-buffer) orig-buf nil 'noasync buff)))
+      (let ((inhibit-read-only t))
         (goto-char (point-min))
         (delete-region (point) (1+ (line-end-position 3)))
         (goto-char (point-max))
