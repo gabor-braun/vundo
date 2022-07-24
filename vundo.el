@@ -735,7 +735,7 @@ This function modifies `vundo--prev-mod-list',
   (let ((string (vundo--translate "●"))
         (pos (vundo-m-point node)))
     (add-text-properties 0 1 (text-properties-at (1- pos)) string)
-    (propertize string 'face 'vundo-highlight)
+    (add-face-text-property 0 1 'vundo-highlight nil string)
     (setq vundo--highlight-overlay
           (make-overlay (1- pos) pos))
     (overlay-put vundo--highlight-overlay
