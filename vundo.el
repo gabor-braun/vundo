@@ -821,12 +821,7 @@ Roll back changes if `vundo-roll-back-on-quit' is non-nil."
       (vundo--current-node vundo--prev-mod-list)
       vundo--roll-back-to-this
       vundo--orig-buffer vundo--prev-mod-list))
-   (with-current-buffer vundo--orig-buffer
-     (setq-local buffer-read-only nil))
-   (let ((orig-buffer vundo--orig-buffer))
-     (kill-buffer-and-window)
-     (with-current-buffer orig-buffer
-       (run-hooks 'vundo-post-exit-hook)))))
+   (vundo-confirm)))
 
 (define-button-type 'vundo-node
   'follow-link t
