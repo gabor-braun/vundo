@@ -823,6 +823,18 @@ Roll back changes if `vundo-roll-back-on-quit' is non-nil."
       vundo--orig-buffer vundo--prev-mod-list))
    (vundo-confirm)))
 
+(defun vundo-confirm ()
+  "Confirm change and close vundo window."
+  (interactive)
+  (with-current-buffer vundo--orig-buffer
+    (setq-local buffer-read-only nil))
+  (let ((orig-buffer vundo--orig-buffer))
+    (kill-buffer-and-window)
+    (with-current-buffer orig-buffer
+      (run-hooks 'vundo-post-exit-hook))))
+
+;; The button ought to be defined at the tree drawing code, but it
+;; uses macros and variables not defined earlier.
 (define-button-type 'vundo-node
   'follow-link t
   'help-echo "Go to this node."
@@ -839,16 +851,6 @@ Roll back changes if `vundo-roll-back-on-quit' is non-nil."
                    (vundo--refresh-buffer
                     vundo--orig-buffer (current-buffer)
                     'incremental))))
-
-(defun vundo-confirm ()
-  "Confirm change and close vundo window."
-  (interactive)
-  (with-current-buffer vundo--orig-buffer
-    (setq-local buffer-read-only nil))
-  (let ((orig-buffer vundo--orig-buffer))
-    (kill-buffer-and-window)
-    (with-current-buffer orig-buffer
-      (run-hooks 'vundo-post-exit-hook))))
 
 ;;; Traverse undo tree
 
