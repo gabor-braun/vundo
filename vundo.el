@@ -105,7 +105,11 @@
                  (const :tag "Top"    top)))
 
 (defcustom vundo-enable-diff nil
-  "If non-nil, vundo will display the diff of the node in another window."
+  "If non-nil, vundo will display diff of current undo by default.
+\\<vundo-mode-map>You can always toggle the diff display \
+using \\[vundo-toggle-diff], regardless of the
+setting of this variable."
+  ;; In vundo buffer the variable holds the diff buffer.
   :type 'boolean)
 
 (defvar vundo-translation-alist nil
@@ -441,8 +445,10 @@ WINDOW is the window that was/is displaying the vundo buffer."
     (define-key map (kbd "q") #'vundo-quit)
     (define-key map (kbd "C-g") #'vundo-quit)
     (define-key map (kbd "RET") #'kill-buffer-and-window)
+    (define-key map (kbd "=") #'vundo-toggle-diff)
+    (define-key map (kbd "d") #'vundo-toggle-diff)
     (define-key map (kbd "i") #'vundo--inspect)
-    (define-key map (kbd "d") #'vundo--debug)
+    (define-key map (kbd "D") #'vundo--debug)
     map)
   "Keymap for ‘vundo--mode’.")
 
@@ -881,6 +887,16 @@ If ARG < 0, move forward."
      (vundo--refresh-buffer
       vundo--orig-buffer (current-buffer)
       'incremental))))
+
+(defun vundo-toggle-diff ()
+  "Toggle display of diff of current node in vundo buffer."
+  (interactive)
+  (unless (derived-mode-p 'vundo--mode)
+    (error "Not in vundo buffer"))
+  (if (and (buffer-live-p vundo-enable-diff)
+           (get-buffer-window vundo-enable-diff 'visible))
+      (kill-buffer vundo-enable-diff)
+    (vundo--show-diff)))
 
 (defun vundo--show-diff ()
   "Show diff for current undo node.
