@@ -52,7 +52,8 @@
   "Setup and evaluate BODY."
   `(with-temp-buffer
      (buffer-enable-undo)
-     (let ((vundo-translation-alist nil))
+     (let ((vundo-translation-alist nil)
+           (vundo-enable-diff nil))
        ,@body)))
 
 (ert-deftest vundo-test--1 ()
