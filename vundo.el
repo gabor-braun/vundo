@@ -898,6 +898,7 @@ This function must be called from a vundo buffer."
 (defun vundo--update-diff ()
   "Update vundo diff buffer."
   (when (buffer-live-p vundo-enable-diff)
+    (with-current-buffer
   (let ((current (vundo--current-node vundo--prev-mod-list))
         (orig-buf vundo--orig-buffer)
             (buff vundo-enable-diff))
@@ -906,23 +907,22 @@ This function must be called from a vundo buffer."
       (insert (with-current-buffer orig-buf
                 (save-restriction (widen) (buffer-string))))
       (primitive-undo 1 (vundo-m-undo-list current))
-      (diff-no-select (current-buffer) orig-buf nil 'noasync buff))
+      (diff-no-select (current-buffer) orig-buf nil 'noasync buff)))
 
     (let ((inhibit-read-only t))
-      (with-current-buffer buff
         (goto-char (point-min))
         (delete-region (point) (1+ (line-end-position 3)))
         (goto-char (point-max))
         (delete-region (line-beginning-position -1) (point-max))
         (setq cursor-type nil)
-        (setq buffer-read-only t)
-        (when-let ((win (get-buffer-window nil 0)))
-          (set-window-point win (point-min))
-          (fit-window-to-buffer
-           win
-           (round (* .3 (window-height
-                         (window-main-window (window-frame win)))))
-           7)))))))
+        (setq buffer-read-only t))
+      (when-let ((win (get-buffer-window nil 0)))
+        (set-window-point win (point-min))
+        (fit-window-to-buffer
+         win
+         (round (* .3 (window-height
+                       (window-main-window (window-frame win)))))
+         7)))))
 
 ;;; Debug
 
