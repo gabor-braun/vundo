@@ -71,7 +71,8 @@
   "Setup and evaluate BODY."
   `(with-temp-buffer
      (buffer-enable-undo)
-     (let ((vundo-glyph-alist vundo-unicode-symbols))
+     (let ((vundo-glyph-alist vundo-unicode-symbols)
+           (vundo-enable-diff nil))
        ,@body)))
 
 (ert-deftest vundo-test--1 ()

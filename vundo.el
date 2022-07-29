@@ -156,6 +156,7 @@
 (require 'pcase)
 (require 'cl-lib)
 (require 'seq)
+(autoload 'diff-no-select "diff")
 
 ;;; Customization
 
@@ -191,6 +192,14 @@
   "The vundo window pops up on this side."
   :type '(choice (const :tag "Bottom" bottom)
                  (const :tag "Top"    top)))
+
+(defcustom vundo-enable-diff nil
+  "If non-nil, vundo will display diff of current undo by default.
+\\<vundo-mode-map>You can always toggle the diff display \
+using \\[vundo-toggle-diff], regardless of the
+setting of this variable."
+  ;; In vundo buffer the variable holds the diff buffer.
+  :type 'boolean)
 
 (defconst vundo-ascii-symbols
   '((selected-node . ?x)
@@ -603,8 +612,10 @@ WINDOW is the window that was/is displaying the vundo buffer."
     (define-key map (kbd "q") #'vundo-quit)
     (define-key map (kbd "C-g") #'vundo-quit)
     (define-key map (kbd "RET") #'vundo-confirm)
+    (define-key map (kbd "=") #'vundo-toggle-diff)
+    (define-key map (kbd "d") #'vundo-toggle-diff)
     (define-key map (kbd "i") #'vundo--inspect)
-    (define-key map (kbd "d") #'vundo--debug)
+    (define-key map (kbd "D") #'vundo--debug)
     map)
   "Keymap for `vundo-mode'.")
 
@@ -720,7 +731,8 @@ This function modifies `vundo--prev-mod-list',
       (setq vundo--prev-mod-list mod-list
             vundo--prev-mod-hash mod-hash
             vundo--prev-undo-list undo-list
-            vundo--orig-buffer orig-buffer))))
+            vundo--orig-buffer orig-buffer)
+      (vundo--update-diff))))
 
 (defun vundo--current-node (mod-list)
   "Return the currently highlighted node in MOD-LIST."
@@ -748,7 +760,8 @@ This function modifies `vundo--prev-mod-list',
   (when buffer-read-only
     (user-error "Buffer is read-only"))
   (run-hooks 'vundo-pre-enter-hook)
-  (let ((vundo-buf (vundo-1 (current-buffer))))
+  (let ((vundo-buf (vundo-1 (current-buffer)))
+        (diff vundo-enable-diff))
     (select-window
      (display-buffer-in-side-window
       vundo-buf
@@ -757,6 +770,9 @@ This function modifies `vundo--prev-mod-list',
     (set-window-dedicated-p nil t)
     (let ((window-min-height 3))
       (fit-window-to-buffer nil vundo-window-max-height))
+    (when (setq-local vundo-enable-diff
+                      (and diff (not (bufferp diff))))
+      (vundo--show-diff))
     (goto-char
      (vundo-m-point
       (vundo--current-node vundo--prev-mod-list)))
@@ -826,6 +842,8 @@ Roll back changes if `vundo-roll-back-on-quit' is non-nil."
   (interactive)
   (with-current-buffer vundo--orig-buffer
     (setq-local buffer-read-only nil))
+  (when (buffer-live-p vundo-enable-diff)
+    (kill-buffer vundo-enable-diff))
   (let ((orig-buffer vundo--orig-buffer))
     (kill-buffer-and-window)
     (with-current-buffer orig-buffer
@@ -1117,6 +1135,57 @@ If ARG < 0, move forward."
      (vundo--refresh-buffer
       vundo--orig-buffer (current-buffer)
       'incremental))))
+
+(defun vundo-toggle-diff ()
+  "Toggle display of diff of current node in vundo buffer."
+  (interactive)
+  (unless (derived-mode-p 'vundo-mode)
+    (error "Not in vundo buffer"))
+  (if (and (buffer-live-p vundo-enable-diff)
+           (get-buffer-window vundo-enable-diff 'visible))
+      (kill-buffer vundo-enable-diff)
+    (vundo--show-diff)))
+
+(defun vundo--show-diff ()
+  "Show diff for current undo node.
+This function must be called from a vundo buffer."
+  (display-buffer
+   (setq-local vundo-enable-diff
+               (get-buffer-create "*vundo diff*"))
+   `(display-buffer-in-direction
+     (direction . ,(window-parameter nil 'window-side))
+     (window-min-height . 5)
+     (window-height . .3)
+     (dedicated . t)))
+  (vundo--update-diff))
+
+(defun vundo--update-diff ()
+  "Update vundo diff buffer."
+  (when (buffer-live-p vundo-enable-diff)
+    (with-current-buffer
+        (let ((current (vundo--current-node vundo--prev-mod-list))
+              (orig-buf vundo--orig-buffer)
+              (buff vundo-enable-diff))
+          (with-temp-buffer
+            (erase-buffer)
+            (insert (with-current-buffer orig-buf
+                      (save-restriction (widen) (buffer-string))))
+            (primitive-undo 1 (vundo-m-undo-list current))
+            (diff-no-select (current-buffer) orig-buf nil 'noasync buff)))
+      (let ((inhibit-read-only t))
+        (goto-char (point-min))
+        (delete-region (point) (1+ (line-end-position 3)))
+        (goto-char (point-max))
+        (delete-region (line-beginning-position -1) (point-max))
+        (setq cursor-type nil)
+        (setq buffer-read-only t))
+      (when-let ((win (get-buffer-window nil 0)))
+        (set-window-point win (point-min))
+        (fit-window-to-buffer
+         win
+         (round (* .3 (window-height
+                       (window-main-window (window-frame win)))))
+         7)))))
 
 ;;; Debug
 
